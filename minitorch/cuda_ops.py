@@ -330,40 +330,32 @@ def tensor_reduce(
         BLOCK_DIM = 1024
         cache = cuda.shared.array(BLOCK_DIM, numba.float64)
         out_index = cuda.local.array(MAX_DIMS, numba.int32)
-        a_index = cuda.local.array(MAX_DIMS, numba.int32)
-
-        # Global thread index
-        i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+        in_index = cuda.local.array(MAX_DIMS, numba.int32)
+        global_idx = cuda.blockIdx.x
         local_idx = cuda.threadIdx.x
 
-        if i < out_size:
-            to_index(i, out_shape, out_index)
-            result = reduce_value
-            for j in range(a_shape[reduce_dim]):
-                a_index[:] = out_index
-                a_index[reduce_dim] = j
-                result = fn(
-                    result, a_storage[index_to_position(a_index, a_strides)]
-                )
-            cache[local_idx] = result
+        to_index(global_idx, out_shape, out_index)
 
+        reduced_size = a_shape[reduce_dim]
+        if local_idx < reduced_size:
+            in_index[:] = out_index
+            in_index[reduce_dim] = local_idx
+            cache[local_idx] = a_storage[index_to_position(in_index, a_strides)]
         else:
             cache[local_idx] = reduce_value
 
-        # Synchronize threads
         cuda.syncthreads()
 
-        # Perform reduction in shared memory
-        step = 1
-        while step < BLOCK_DIM:
-            if local_idx % (2 * step) == 0 and (local_idx + step) < BLOCK_DIM:
-                cache[local_idx] = fn(cache[local_idx], cache[local_idx + step])
-            step *= 2
+        stride = BLOCK_DIM // 2
+        while stride > 0:
+            if local_idx < stride and (local_idx + stride) < reduced_size:
+                cache[local_idx] = fn(cache[local_idx], cache[local_idx + stride])
             cuda.syncthreads()
+            stride //= 2
 
-        # Write result to global memory
         if local_idx == 0:
-            out[cuda.blockIdx.x] = cache[0]
+            out_index[reduce_dim] = 0
+            out[index_to_position(out_index, out_strides)] = cache[0]
 
     return cuda.jit()(_reduce)  # type: ignore
 
