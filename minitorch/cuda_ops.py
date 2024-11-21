@@ -170,14 +170,20 @@ def tensor_map(
         in_shape: Shape,
         in_strides: Strides,
     ) -> None:
-        out_index = cuda.local.array(MAX_DIMS, numba.int32)
-        in_index = cuda.local.array(MAX_DIMS, numba.int32)
-        i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+        temp_out_index = cuda.local.array(MAX_DIMS, numba.int32)
+        temp_in_index = cuda.local.array(MAX_DIMS, numba.int32)
 
-        if i < out_size:
-            to_index(i, out_shape, out_index)
-            broadcast_index(out_index, out_shape, in_shape, in_index)
-            out[i] = fn(in_storage[index_to_position(in_index, in_strides)])
+        thread_idx = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+
+        if thread_idx < out_size:
+            to_index(thread_idx, out_shape, temp_out_index)
+
+            broadcast_index(temp_out_index, out_shape, in_shape, temp_in_index)
+
+            output_pos = index_to_position(temp_out_index, out_strides)
+            input_pos = index_to_position(temp_in_index, in_strides)
+
+            out[output_pos] = fn(in_storage[input_pos])
 
     return cuda.jit()(_map)  # type: ignore
 
