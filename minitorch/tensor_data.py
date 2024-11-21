@@ -46,15 +46,17 @@ def index_to_position(index: Index, strides: Strides) -> int:
         Position in storage
 
     """
-    # TODO: Implement for Task 2.1.
-    return sum(i * s for i, s in zip(index, strides))
+    # Replace generator expression with a loop
+    result = 0
+    for i, s in zip(index, strides):
+        result += i * s
+    return result
 
 
 def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
     """Convert an `ordinal` to an index in the `shape`.
-    Should ensure that enumerating position 0 ... size of a
-    tensor produces every index exactly once. It
-    may not be the inverse of `index_to_position`.
+    Ensures that enumerating position 0 ... size of a tensor 
+    produces every index exactly once.
 
     Args:
     ----
@@ -63,10 +65,12 @@ def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
         out_index : return index corresponding to position.
 
     """
-    # TODO: Implement for Task 2.1.
-    for i in range(len(shape) - 1, -1, -1):
-        out_index[i] = ordinal % shape[i]
-        ordinal //= shape[i]
+    ordinal = ordinal + 0  # Create a local copy of ordinal
+    num_dims = len(shape)
+
+    for i in range(num_dims - 1, -1, -1):
+        out_index[i] = int(ordinal % shape[i])  # Explicit integer cast for thread safety
+        ordinal = ordinal // shape[i]  # Update local copy for next iteration
 
 
 def broadcast_index(

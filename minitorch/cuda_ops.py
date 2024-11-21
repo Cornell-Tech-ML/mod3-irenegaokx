@@ -173,8 +173,11 @@ def tensor_map(
         out_index = cuda.local.array(MAX_DIMS, numba.int32)
         in_index = cuda.local.array(MAX_DIMS, numba.int32)
         i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
-        # TODO: Implement for Task 3.3.
-        raise NotImplementedError("Need to implement for Task 3.3")
+
+        if i < out_size:
+            to_index(i, out_shape, out_index)
+            broadcast_index(out_index, out_shape, in_shape, in_index)
+            out[i] = fn(in_storage[index_to_position(in_index, in_strides)])
 
     return cuda.jit()(_map)  # type: ignore
 
@@ -216,14 +219,20 @@ def tensor_zip(
         b_index = cuda.local.array(MAX_DIMS, numba.int32)
         i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
 
-        # TODO: Implement for Task 3.3.
-        raise NotImplementedError("Need to implement for Task 3.3")
+        if i < out_size:
+            to_index(i, out_shape, out_index)
+            broadcast_index(out_index, out_shape, a_shape, a_index)
+            broadcast_index(out_index, out_shape, b_shape, b_index)
+            out[i] = fn(
+                a_storage[index_to_position(a_index, a_strides)],
+                b_storage[index_to_position(b_index, b_strides)],
+            )
 
     return cuda.jit()(_zip)  # type: ignore
 
 
 def _sum_practice(out: Storage, a: Storage, size: int) -> None:
-    """This is a practice sum kernel to prepare for reduce.
+    r"""Practice sum kernel to prepare for reduce.
 
     Given an array of length $n$ and out of size $n // \text{blockDIM}$
     it should sum up each blockDim values into an out cell.
@@ -249,8 +258,25 @@ def _sum_practice(out: Storage, a: Storage, size: int) -> None:
     i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
     pos = cuda.threadIdx.x
 
-    # TODO: Implement for Task 3.3.
-    raise NotImplementedError("Need to implement for Task 3.3")
+    if i < size:
+        cache[pos] = a[i]
+    else:
+        cache[pos] = 0.0
+
+    # Synchronize threads in the block
+    cuda.syncthreads()
+
+    # Reduce within the block
+    step = 1
+    while step < BLOCK_DIM:
+        if pos % (2 * step) == 0 and (pos + step) < BLOCK_DIM:
+            cache[pos] += cache[pos + step]
+        step *= 2
+        cuda.syncthreads()
+
+    # Write result for this block
+    if pos == 0:
+        out[cuda.blockIdx.x] = cache[0]
 
 
 jit_sum_practice = cuda.jit()(_sum_practice)
@@ -297,17 +323,46 @@ def tensor_reduce(
         BLOCK_DIM = 1024
         cache = cuda.shared.array(BLOCK_DIM, numba.float64)
         out_index = cuda.local.array(MAX_DIMS, numba.int32)
-        out_pos = cuda.blockIdx.x
-        pos = cuda.threadIdx.x
+        a_index = cuda.local.array(MAX_DIMS, numba.int32)
 
-        # TODO: Implement for Task 3.3.
-        raise NotImplementedError("Need to implement for Task 3.3")
+        # Global thread index
+        i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+        local_idx = cuda.threadIdx.x
 
-    return jit(_reduce)  # type: ignore
+        if i < out_size:
+            to_index(i, out_shape, out_index)
+            result = reduce_value
+            for j in range(a_shape[reduce_dim]):
+                a_index[:] = out_index
+                a_index[reduce_dim] = j
+                result = fn(
+                    result, a_storage[index_to_position(a_index, a_strides)]
+                )
+            cache[local_idx] = result
+
+        else:
+            cache[local_idx] = reduce_value
+
+        # Synchronize threads
+        cuda.syncthreads()
+
+        # Perform reduction in shared memory
+        step = 1
+        while step < BLOCK_DIM:
+            if local_idx % (2 * step) == 0 and (local_idx + step) < BLOCK_DIM:
+                cache[local_idx] = fn(cache[local_idx], cache[local_idx + step])
+            step *= 2
+            cuda.syncthreads()
+
+        # Write result to global memory
+        if local_idx == 0:
+            out[cuda.blockIdx.x] = cache[0]
+
+    return cuda.jit()(_reduce)  # type: ignore
 
 
 def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
-    """This is a practice square MM kernel to prepare for matmul.
+    """Practice square MM kernel to prepare for matmul.
 
     Given a storage `out` and two storage `a` and `b`. Where we know
     both are shape [size, size] with strides [size, 1].
