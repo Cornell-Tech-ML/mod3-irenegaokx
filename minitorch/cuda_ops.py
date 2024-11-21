@@ -393,48 +393,37 @@ def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
     """
     BLOCK_DIM = 32
 
-    # Shared memory for input matrices
-    a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
-    b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+    tile_a = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+    tile_b = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
 
-    # Global thread indices
     row = cuda.blockIdx.y * cuda.blockDim.y + cuda.threadIdx.y
     col = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
 
-    # Local thread indices
     local_row = cuda.threadIdx.y
     local_col = cuda.threadIdx.x
 
-    # Accumulator for the output value
-    result = 0.0
+    value = 0.0
 
-    # Iterate through blocks of the input matrices
     for tile in range((size + BLOCK_DIM - 1) // BLOCK_DIM):
-        # Load a block of A into shared memory
         if row < size and (tile * BLOCK_DIM + local_col) < size:
-            a_shared[local_row, local_col] = a[row * size + (tile * BLOCK_DIM + local_col)]
+            tile_a[local_row, local_col] = a[row * size + (tile * BLOCK_DIM + local_col)]
         else:
-            a_shared[local_row, local_col] = 0.0
+            tile_a[local_row, local_col] = 0.0
 
-        # Load a block of B into shared memory
         if col < size and (tile * BLOCK_DIM + local_row) < size:
-            b_shared[local_row, local_col] = b[(tile * BLOCK_DIM + local_row) * size + col]
+            tile_b[local_row, local_col] = b[(tile * BLOCK_DIM + local_row) * size + col]
         else:
-            b_shared[local_row, local_col] = 0.0
+            tile_b[local_row, local_col] = 0.0
 
-        # Synchronize to ensure all threads have loaded their data
         cuda.syncthreads()
 
-        # Perform computation for this block
         for k in range(BLOCK_DIM):
-            result += a_shared[local_row, k] * b_shared[k, local_col]
+            value += tile_a[local_row, k] * tile_b[k, local_col]
 
-        # Synchronize to ensure all threads are done with the current block
         cuda.syncthreads()
 
-    # Write the result to global memory
     if row < size and col < size:
-        out[row * size + col] = result
+        out[row * size + col] = value
 
 
 jit_mm_practice = jit(_mm_practice)
