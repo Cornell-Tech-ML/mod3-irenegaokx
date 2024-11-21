@@ -328,31 +328,34 @@ def tensor_reduce(
         reduce_value: float,
     ) -> None:
         BLOCK_DIM = 1024
+
+        # Shared memory for reduction
         cache = cuda.shared.array(BLOCK_DIM, numba.float64)
         out_index = cuda.local.array(MAX_DIMS, numba.int32)
         a_index = cuda.local.array(MAX_DIMS, numba.int32)
 
-        # Current thread position
         thread_id = cuda.threadIdx.x
-        global_id = cuda.blockIdx.x * cuda.blockDim.x + thread_id
+        block_id = cuda.blockIdx.x
+        global_id = block_id * cuda.blockDim.x + thread_id
+
+        # Map the output index for non-reduction dimensions
+        if block_id < out_size:
+            to_index(block_id, out_shape, out_index)
 
         # Initialize shared memory
-        if global_id < out_size:
-            to_index(global_id, out_shape, out_index)
-            a_index[:] = out_index
-            cache[thread_id] = reduce_value
+        cache[thread_id] = reduce_value
 
-            # Perform reduction along the specified dimension
+        # Reduction across the specified dimension
+        if block_id < out_size:
             for i in range(a_shape[reduce_dim]):
+                a_index[:] = out_index
                 a_index[reduce_dim] = i
-                a_pos = index_to_position(a_index, a_strides)
-                cache[thread_id] = fn(cache[thread_id], a_storage[a_pos])
-        else:
-            cache[thread_id] = reduce_value
+                in_pos = index_to_position(a_index, a_strides)
+                cache[thread_id] = fn(cache[thread_id], a_storage[in_pos])
 
         cuda.syncthreads()
 
-        # Reduction within the block
+        # Parallel reduction in shared memory
         stride = BLOCK_DIM // 2
         while stride > 0:
             if thread_id < stride:
@@ -360,8 +363,8 @@ def tensor_reduce(
             cuda.syncthreads()
             stride //= 2
 
-        # Store the result in the output tensor
-        if thread_id == 0:
+        # Write the reduced value back to the output
+        if thread_id == 0 and block_id < out_size:
             out_pos = index_to_position(out_index, out_strides)
             out[out_pos] = cache[0]
 
