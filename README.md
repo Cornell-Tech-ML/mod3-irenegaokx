@@ -35,6 +35,7 @@ The files that will be synced are:
 [View output here](output_files/parallel.txt)
 
 ## 3.4: GPU and CPU comparison
+```bash
 Timing summary
 Size: 64
     fast: 0.00307
@@ -51,6 +52,7 @@ Size: 512
 Size: 1024
     fast: 10.55691
     gpu: 0.88907
+```
 
 ![GPU vs CPU time](output_files/output.png)
 
