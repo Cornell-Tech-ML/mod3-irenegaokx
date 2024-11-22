@@ -328,48 +328,42 @@ def tensor_reduce(
         reduce_value: float,
     ) -> None:
         BLOCK_DIM = 1024
-
-        # Shared memory for reduction
         cache = cuda.shared.array(BLOCK_DIM, numba.float64)
         out_index = cuda.local.array(MAX_DIMS, numba.int32)
-        a_index = cuda.local.array(MAX_DIMS, numba.int32)
+        out_pos = cuda.blockIdx.x
+        pos = cuda.threadIdx.x
 
-        thread_id = cuda.threadIdx.x
-        block_id = cuda.blockIdx.x
-        global_id = block_id * cuda.blockDim.x + thread_id
+        # TODO: Implement for Task 3.3.
+        #raise NotImplementedError("Need to implement for Task 3.3")
 
-        # Map the output index for non-reduction dimensions
-        if block_id < out_size:
-            to_index(block_id, out_shape, out_index)
+        # Handle non-reduce dimensions
+        to_index(out_pos, out_shape, out_index)
 
-        # Initialize shared memory
-        cache[thread_id] = reduce_value
+        # Initialize with reduction value
+        cache[pos] = reduce_value
 
-        # Reduction across the specified dimension
-        if block_id < out_size:
-            for i in range(a_shape[reduce_dim]):
-                a_index[:] = out_index
-                a_index[reduce_dim] = i
-                in_pos = index_to_position(a_index, a_strides)
-                cache[thread_id] = fn(cache[thread_id], a_storage[in_pos])
+        # Load and reduce along the reduction dimension
+        if pos < a_shape[reduce_dim]:
+            out_index[reduce_dim] = pos
+            in_pos = index_to_position(out_index, a_strides)
+            cache[pos] = a_storage[in_pos]
 
         cuda.syncthreads()
 
         # Parallel reduction in shared memory
         stride = BLOCK_DIM // 2
         while stride > 0:
-            if thread_id < stride:
-                cache[thread_id] = fn(cache[thread_id], cache[thread_id + stride])
+            if pos < stride:
+                cache[pos] = fn(cache[pos], cache[pos + stride])
             cuda.syncthreads()
             stride //= 2
 
-        # Write the reduced value back to the output
-        if thread_id == 0 and block_id < out_size:
+        # Write result
+        if pos == 0:
             out_pos = index_to_position(out_index, out_strides)
             out[out_pos] = cache[0]
 
     return jit(_reduce)  # type: ignore
-
 
 def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
     """A practice square MM kernel to prepare for matmul.
