@@ -75,7 +75,6 @@ Size: 1024
 [View output here](output_files/large_cpu.txt) 
 
 
-
 ## 3.5 Documentation
 
 ```bash
