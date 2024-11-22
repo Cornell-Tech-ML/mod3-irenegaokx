@@ -335,35 +335,45 @@ def tensor_reduce(
 
         # TODO: Implement for Task 3.3.
         #raise NotImplementedError("Need to implement for Task 3.3")
+        for i in range(len(out_shape)):
+            if i == reduce_dim:
+                out_index[i] = 0
+            else:
+                out_index[i] = (out_pos // out_strides[i]) % out_shape[i]
 
-        # Handle non-reduce dimensions
-        to_index(out_pos, out_shape, out_index)
+        # Calculate base index for input
+        base_idx = 0
+        for i in range(len(a_shape)):
+            base_idx += a_strides[i] * (out_index[i] if i != reduce_dim else 0)
 
-        # Initialize with reduction value
+        # Initialize shared memory with reduce_value
         cache[pos] = reduce_value
 
-        # Load and reduce along the reduction dimension
-        if pos < a_shape[reduce_dim]:
-            out_index[reduce_dim] = pos
-            in_pos = index_to_position(out_index, a_strides)
-            cache[pos] = a_storage[in_pos]
+        # Perform reduction for this thread
+        reduce_size = a_shape[reduce_dim]
+        stride = a_strides[reduce_dim]
+        for i in range(pos, reduce_size, BLOCK_DIM):
+            cache[pos] = fn(cache[pos], a_storage[base_idx + i * stride])
 
         cuda.syncthreads()
 
-        # Parallel reduction in shared memory
-        stride = BLOCK_DIM // 2
-        while stride > 0:
-            if pos < stride:
-                cache[pos] = fn(cache[pos], cache[pos + stride])
+        # Perform block reduction
+        step = BLOCK_DIM // 2
+        while step > 0:
+            if pos < step:
+                cache[pos] = fn(cache[pos], cache[pos + step])
             cuda.syncthreads()
-            stride //= 2
+            step //= 2
 
-        # Write result
+        # Write the result to the output
         if pos == 0:
-            out_pos = index_to_position(out_index, out_strides)
-            out[out_pos] = cache[0]
+            out_idx = 0
+            for i in range(len(out_shape)):
+                out_idx += out_strides[i] * out_index[i]
+            out[out_idx] = cache[0]
 
     return jit(_reduce)  # type: ignore
+
 
 def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
     """A practice square MM kernel to prepare for matmul.
