@@ -35,6 +35,28 @@ The files that will be synced are:
 [View output here](output_files/parallel.txt)
 
 ## 3.4: GPU and CPU comparison
+Timing summary
+Size: 64
+    fast: 0.00307
+    gpu: 0.00610
+Size: 128
+    fast: 0.01520
+    gpu: 0.01332
+Size: 256
+    fast: 0.10017
+    gpu: 0.04800
+Size: 512
+    fast: 0.98971
+    gpu: 0.20878
+Size: 1024
+    fast: 10.55691
+    gpu: 0.88907
+
+![GPU vs CPU time](output_files/output.png)
 
 
+## 3.5
+## CPU, Hidden 100
+Split:
+[Split: View output here](output_files/split_cpu_100.txt)
 

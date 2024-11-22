@@ -55,7 +55,7 @@ def index_to_position(index: Index, strides: Strides) -> int:
 
 def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
     """Convert an `ordinal` to an index in the `shape`.
-    Ensures that enumerating position 0 ... size of a tensor 
+    Ensures that enumerating position 0 ... size of a tensor
     produces every index exactly once.
 
     Args:
@@ -69,7 +69,9 @@ def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
     num_dims = len(shape)
 
     for i in range(num_dims - 1, -1, -1):
-        out_index[i] = int(ordinal % shape[i])  # Explicit integer cast for thread safety
+        out_index[i] = int(
+            ordinal % shape[i]
+        )  # Explicit integer cast for thread safety
         ordinal = ordinal // shape[i]  # Update local copy for next iteration
 
 
