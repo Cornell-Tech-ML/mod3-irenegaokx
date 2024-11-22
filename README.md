@@ -57,14 +57,14 @@ Size: 1024
 
 ## 3.5
 ## GPU, Hidden 100
-[Split: View output here](output_files/gpu/split_gpu_100.txt)  
-[Xor: View output here](output_files/gpu/xor_gpu_100.txt)  
-[Simple: View output here](output_files/gpu/simple_gpu_100.txt) 
+[Split: View output here](output_files/gpu100/split_gpu_100.txt)  
+[Xor: View output here](output_files/gpu100/xor_gpu_100.txt)  
+[Simple: View output here](output_files/gpu100/simple_gpu_100.txt) 
 
 ## CPU, Hidden 100
-[Split: View output here](output_files/cpu/split_cpu_100.txt) 
-[Xor: View output here](output_files/cpu/xor_cpu_100.txt) 
-[Simple: View output here](output_files/cpu/simple_cpu_100.txt) 
+[Split: View output here](output_files/cpu100/split_cpu_100.txt)  
+[Xor: View output here](output_files/cpu100/xor_cpu_100.txt)  
+[Simple: View output here](output_files/cpu100/simple_cpu_100.txt) 
 
 
 ## Large GPU using Split
